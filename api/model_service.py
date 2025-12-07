@@ -107,7 +107,6 @@ def predict_horizon_from_df(
     last_row = hist.iloc[-1]
     last_year = int(last_row["year"])
 
-    # starting levels
     lc_level = float(last_row["low_carbon_share_pct"])
     gen_level = float(last_row["electricity_generation_twh"])
     log_gen_level = float(np.log(max(gen_level, 1e-6)))
@@ -122,7 +121,6 @@ def predict_horizon_from_df(
         delta_lc = float(LC_MODEL.predict(X_scaled)[0])
         delta_log_gen = float(GEN_MODEL.predict(X)[0])
 
-        # update levels
         lc_level = lc_level + delta_lc
         lc_level = max(0.0, min(100.0, lc_level))  # clamp to [0, 100]
 
@@ -138,13 +136,11 @@ def predict_horizon_from_df(
             }
         )
 
-        # append predicted year to history for next step
         new_row = hist.iloc[-1].copy()
         new_row["year"] = target_year
         new_row["low_carbon_share_pct"] = lc_level
         new_row["electricity_generation_twh"] = gen_level
 
-        # keep previous shares to distribute TWh
         eps = 1e-9
         gen = max(gen_level, eps)
         for src in [

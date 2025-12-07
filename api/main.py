@@ -22,12 +22,22 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
 # Async DB engine for Railway Postgres
-# Railway usually gives postgres://, asyncpg expects postgresql+asyncpg://
-ASYNC_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://")
-engine = create_async_engine(ASYNC_DATABASE_URL, future=True)
-AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+# Guard against missing DATABASE_URL
+if not DATABASE_URL:
+    # app still starts, but DB routes will fail with 500
+    ASYNC_DATABASE_URL = None
+    engine = None
+    AsyncSessionLocal = None
+else:
+    ASYNC_DATABASE_URL = DATABASE_URL.replace(
+        "postgres://", "postgresql+asyncpg://"
+    )
+    engine = create_async_engine(ASYNC_DATABASE_URL, future=True)
+    AsyncSessionLocal = sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
-# CORS (open for now; restrict later to your Railway frontend + localhost)
+# CORS (open for now; restrict later)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # e.g. ["http://localhost:5173", "https://your-frontend.up.railway.app"]
@@ -47,6 +57,12 @@ async def list_countries():
     """
     Return list of countries from the countries table in Postgres.
     """
+    if AsyncSessionLocal is None:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_URL is not configured on the server.",
+        )
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             text(
@@ -63,6 +79,9 @@ async def fetch_history_df(iso3: str) -> pd.DataFrame:
     Fetch full historical time series for a country from Postgres,
     matching the columns used in the ML pipeline.
     """
+    if AsyncSessionLocal is None:
+        return pd.DataFrame()
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             text(
@@ -130,7 +149,6 @@ async def fetch_history_df(iso3: str) -> pd.DataFrame:
 def model_metrics():
     """
     Return global validation and test metrics for the forecasting models.
-    Expects models/metrics.json at project root (now also inside api/models if you moved it).
     """
     metrics_path = os.path.join(BASE_DIR, "models", "metrics.json")
     if not os.path.exists(metrics_path):
