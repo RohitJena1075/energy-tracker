@@ -5,9 +5,9 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# base dirs: this file is in api/, models is in project root
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+# this file is api/model_service.py, models folder is at project root: /app/models
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))      # /app
+PROJECT_ROOT = BASE_DIR                                   # since api is the root in container
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 # load config and models
@@ -23,8 +23,6 @@ GEN_MODEL = joblib.load(
 )
 
 FEATURE_COLS = CFG["feature_cols"]
-
-
 
 def _add_shares_and_lags(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
