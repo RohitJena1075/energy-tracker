@@ -130,9 +130,9 @@ async def fetch_history_df(iso3: str) -> pd.DataFrame:
 def model_metrics():
     """
     Return global validation and test metrics for the forecasting models.
-    Expects models/metrics.json at project root: energy-tracker/models/metrics.json
+    Expects models/metrics.json at project root (now also inside api/models if you moved it).
     """
-    metrics_path = os.path.join(PROJECT_ROOT, "models", "metrics.json")
+    metrics_path = os.path.join(BASE_DIR, "models", "metrics.json")
     if not os.path.exists(metrics_path):
         return {"error": "metrics file not found", "path": metrics_path}
     with open(metrics_path, "r") as f:
@@ -150,3 +150,6 @@ async def forecast(iso3: str, horizon: int = Query(5, ge=1, le=10)):
         return predict_horizon_from_df(iso3, hist_df, horizon=horizon)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # model stack cannot be loaded on this Railway image
+        raise HTTPException(status_code=500, detail=str(e))

@@ -8,18 +8,44 @@ import joblib
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /app
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
-with open(os.path.join(MODELS_DIR, "feature_config.json"), "r") as f:
-    CFG = json.load(f)
+_CFG = None
+_SCALER = None
+_LC_MODEL = None
+_GEN_MODEL = None
+_FEATURE_COLS = None
 
-SCALER = joblib.load(os.path.join(MODELS_DIR, "scaler.joblib"))
-LC_MODEL = joblib.load(
-    os.path.join(MODELS_DIR, f"{CFG['best_lc_model_type']}_lc_model.joblib")
-)
-GEN_MODEL = joblib.load(
-    os.path.join(MODELS_DIR, f"{CFG['best_gen_model_type']}_gen_model.joblib")
-)
 
-FEATURE_COLS = CFG["feature_cols"]
+def _load_models():
+    """
+    Lazy-load config, scaler and models.
+    Raises RuntimeError with a short message if the stack cannot be loaded
+    (e.g. missing libgomp / compiled sklearn on Railway).
+    """
+    global _CFG, _SCALER, _LC_MODEL, _GEN_MODEL, _FEATURE_COLS
+    if _CFG is not None:
+        return _CFG, _SCALER, _LC_MODEL, _GEN_MODEL, _FEATURE_COLS
+
+    try:
+        with open(os.path.join(MODELS_DIR, "feature_config.json"), "r") as f:
+            _CFG = json.load(f)
+
+        _SCALER = joblib.load(os.path.join(MODELS_DIR, "scaler.joblib"))
+        _LC_MODEL = joblib.load(
+            os.path.join(MODELS_DIR, f"{_CFG['best_lc_model_type']}_lc_model.joblib")
+        )
+        _GEN_MODEL = joblib.load(
+            os.path.join(MODELS_DIR, f"{_CFG['best_gen_model_type']}_gen_model.joblib")
+        )
+        _FEATURE_COLS = _CFG["feature_cols"]
+    except Exception as e:
+        raise RuntimeError(
+            "Model stack could not be loaded on this environment "
+            "(likely missing libgomp or compiled sklearn)."
+        ) from e
+
+    return _CFG, _SCALER, _LC_MODEL, _GEN_MODEL, _FEATURE_COLS
+
+
 def _add_shares_and_lags(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -68,6 +94,8 @@ def predict_horizon_from_df(
     for horizon future years (1–10) after the last actual year,
     given a history dataframe from the database.
     """
+    CFG, SCALER, LC_MODEL, GEN_MODEL, FEATURE_COLS = _load_models()
+
     iso3 = iso3.upper()
     if hist_raw.empty:
         raise ValueError(f"No history for {iso3}")
