@@ -3,7 +3,6 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
 # Data and ML stack
-# relax versions so they install cleanly on Railway's Python
 numpy
 pandas
 scikit-learn==1.5.1
@@ -12,7 +11,7 @@ xgboost==2.1.1
 # Database
 SQLAlchemy==2.0.36
 asyncpg==0.30.0
-
+greenlet>=3.0.0
 
 # Config and environment
 python-dotenv==1.0.1
