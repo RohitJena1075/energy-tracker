@@ -4,8 +4,8 @@ uvicorn[standard]==0.30.6
 
 # Data and ML stack
 # relax versions so they install cleanly on Railway's Python
-numpy>=1.26,<2.0
-pandas>=2.2,<3.0
+numpy
+pandas
 scikit-learn==1.5.1
 xgboost==2.1.1
 
