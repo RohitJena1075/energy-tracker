@@ -5,7 +5,10 @@ import pandas as pd
 import numpy as np
 import joblib
 
-MODELS_DIR = "models"
+# base dirs: this file is in api/, models is in project root
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 # load config and models
 with open(os.path.join(MODELS_DIR, "feature_config.json"), "r") as f:
@@ -20,6 +23,7 @@ GEN_MODEL = joblib.load(
 )
 
 FEATURE_COLS = CFG["feature_cols"]
+
 
 
 def _add_shares_and_lags(df: pd.DataFrame) -> pd.DataFrame:
