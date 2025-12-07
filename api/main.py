@@ -2,29 +2,33 @@
 from fastapi import FastAPI, HTTPException, Query
 import model_service
 from fastapi.middleware.cors import CORSMiddleware
-import psycopg2
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 import os
 import json
 from dotenv import load_dotenv
 
+# Load env vars (DATABASE_URL from Railway)
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = FastAPI(title="Energy Forecast API")
 
-# base directories
+# Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
-# CORS (dev + prod)
+# Async DB engine for Railway Postgres
+# Railway usually gives postgres://, asyncpg/SQLAlchemy expect postgresql+asyncpg://
+ASYNC_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://")
+engine = create_async_engine(ASYNC_DATABASE_URL, future=True)
+AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+# CORS (open while testing; later restrict to specific frontend URL)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",          # Vite dev
-        "http://localhost:3000",          # if you ever use CRA
-        # "https://YOUR-frontend-url.up.railway.app",  # add real URL after deploy
-        "*",                              # optional while testing
-    ],
+    allow_origins=["*"],  # or ["http://localhost:5173", "https://your-frontend.up.railway.app"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,15 +41,18 @@ def health():
 
 
 @app.get("/countries")
-def list_countries():
-    conn = psycopg2.connect(DATABASE_URL)
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT iso3, name FROM countries WHERE iso3 IS NOT NULL ORDER BY name"
-    )
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+async def list_countries():
+    """
+    Return list of countries from the countries table in Postgres.
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text(
+                "SELECT iso3, name FROM countries "
+                "WHERE iso3 IS NOT NULL ORDER BY name"
+            )
+        )
+        rows = result.all()
     return [{"code": r[0].strip(), "name": r[1]} for r in rows]
 
 
@@ -53,6 +60,7 @@ def list_countries():
 def model_metrics():
     """
     Return global validation and test metrics for the forecasting models.
+    Expects models/metrics.json at project root: energy-tracker/models/metrics.json
     """
     metrics_path = os.path.join(PROJECT_ROOT, "models", "metrics.json")
     if not os.path.exists(metrics_path):
@@ -64,6 +72,9 @@ def model_metrics():
 
 @app.get("/forecast/{iso3}")
 def forecast(iso3: str, horizon: int = Query(5, ge=1, le=10)):
+    """
+    Return forecast for a given country iso3 for the next `horizon` years.
+    """
     try:
         return model_service.predict_horizon(iso3, horizon=horizon)
     except ValueError as e:
