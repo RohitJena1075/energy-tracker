@@ -136,21 +136,16 @@ def predict_horizon_from_df(
     results = []
 
     for step in range(1, horizon + 1):
-        # build feature row and apply same scaling as during training
         row = hist.iloc[-1].reindex(FEATURE_COLS).fillna(0.0)
-
-# Ensure all features are float, not Decimal
+        # ensure float features
         X = row.astype(float).values.reshape(1, -1)
 
-# Standardization: (X - mean) / scale
         X_scaled = (X - means) / scales
-
         delta_lc = float(LC_MODEL.predict(X_scaled)[0])
         delta_log_gen = float(GEN_MODEL.predict(X)[0])
 
         lc_level = lc_level + delta_lc
-        lc_level = max(0.0, min(100.0, lc_level))  # clamp to [0, 100]
-
+        lc_level = max(0.0, min(100.0, lc_level))
         log_gen_level = log_gen_level + delta_log_gen
         gen_level = float(np.exp(log_gen_level))
 
@@ -163,14 +158,13 @@ def predict_horizon_from_df(
             }
         )
 
-        # roll the system forward one year for next iteration
         new_row = hist.iloc[-1].copy()
         new_row["year"] = target_year
         new_row["low_carbon_share_pct"] = lc_level
         new_row["electricity_generation_twh"] = gen_level
 
         eps = 1e-9
-        gen = max(gen_level, eps)
+        gen = float(max(gen_level, eps))
         for src in [
             "coal",
             "oil",
@@ -182,11 +176,17 @@ def predict_horizon_from_df(
             "other_renewables",
         ]:
             share_col = f"{src}_share"
-            prev_share = hist.iloc[-1].get(share_col, 0.0)
+            prev_share = float(hist.iloc[-1].get(share_col, 0.0))
             new_row[f"{src}_twh"] = prev_share * gen
+
+        # ensure numeric dtypes stay float
+        for col in new_row.index:
+            if col.endswith("_twh") or col.endswith("_share"):
+                new_row[col] = float(new_row[col])
 
         hist = pd.concat([hist, new_row.to_frame().T], ignore_index=True)
         hist = _add_shares_and_lags(hist)
+
 
     return {
         "iso3": iso3,
