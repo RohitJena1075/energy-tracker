@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
 import json
+import logging
 import pandas as pd
 import numpy as np
 import joblib
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /app
 MODELS_DIR = os.path.join(BASE_DIR, "models")
@@ -26,18 +29,37 @@ def _load_models():
         return _CFG, _SCALER, _LC_MODEL, _GEN_MODEL, _FEATURE_COLS
 
     try:
-        with open(os.path.join(MODELS_DIR, "feature_config.json"), "r") as f:
+        cfg_path = os.path.join(MODELS_DIR, "feature_config.json")
+        scaler_path = os.path.join(MODELS_DIR, "scaler.joblib")
+
+        logger.info("Loading model config from %s", cfg_path)
+        with open(cfg_path, "r") as f:
             _CFG = json.load(f)
 
-        _SCALER = joblib.load(os.path.join(MODELS_DIR, "scaler.joblib"))
-        _LC_MODEL = joblib.load(
-            os.path.join(MODELS_DIR, f"{_CFG['best_lc_model_type']}_lc_model.joblib")
+        logger.info("Loading scaler from %s", scaler_path)
+        _SCALER = joblib.load(scaler_path)
+
+        lc_path = os.path.join(
+            MODELS_DIR, f"{_CFG['best_lc_model_type']}_lc_model.joblib"
         )
-        _GEN_MODEL = joblib.load(
-            os.path.join(MODELS_DIR, f"{_CFG['best_gen_model_type']}_gen_model.joblib")
+        gen_path = os.path.join(
+            MODELS_DIR, f"{_CFG['best_gen_model_type']}_gen_model.joblib"
         )
+
+        logger.info("Loading LC model from %s", lc_path)
+        _LC_MODEL = joblib.load(lc_path)
+
+        logger.info("Loading GEN model from %s", gen_path)
+        _GEN_MODEL = joblib.load(gen_path)
+
         _FEATURE_COLS = _CFG["feature_cols"]
+        logger.info(
+            "Models loaded OK from %s (n_features=%d)",
+            MODELS_DIR,
+            len(_FEATURE_COLS),
+        )
     except Exception as e:
+        logger.exception("Failed to load models from %s", MODELS_DIR)
         raise RuntimeError(
             "Model stack could not be loaded on this environment "
             "(likely missing libgomp or compiled sklearn)."
