@@ -138,9 +138,11 @@ def predict_horizon_from_df(
     for step in range(1, horizon + 1):
         # build feature row and apply same scaling as during training
         row = hist.iloc[-1].reindex(FEATURE_COLS).fillna(0.0)
-        X = row.values.reshape(1, -1)
 
-        # Standardization: (X - mean) / scale
+# Ensure all features are float, not Decimal
+        X = row.astype(float).values.reshape(1, -1)
+
+# Standardization: (X - mean) / scale
         X_scaled = (X - means) / scales
 
         delta_lc = float(LC_MODEL.predict(X_scaled)[0])
